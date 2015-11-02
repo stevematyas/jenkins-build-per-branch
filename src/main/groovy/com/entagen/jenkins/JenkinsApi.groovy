@@ -59,9 +59,12 @@ class JenkinsApi {
         post('createItem', missingJobConfig, [name: missingJob.jobName, mode: 'copy', from: templateJob.jobName], ContentType.XML)
 
         post('job/' + missingJob.jobName + "/config.xml", missingJobConfig, [:], ContentType.XML)
-        //Forced diable enable to work around Jenkins' automatic disabling of clones jobs
+        //Forced disable enable to work around Jenkins' automatic disabling of clones jobs
+        //But only if the original job was enabled
         post('job/' + missingJob.jobName + '/disable')
-        post('job/' + missingJob.jobName + '/enable')
+        if (!missingJobConfig.contains("<disabled>true</disabled>")) {
+            post('job/' + missingJob.jobName + '/enable')
+        }
     }
 
     void startJob(ConcreteJob job) {
@@ -99,13 +102,14 @@ class JenkinsApi {
         post("job/${jobName}/doDelete")
     }
 
-    void createViewForBranch(BranchView branchView, String nestedWithinView = null) {
+    void createViewForBranch(BranchView branchView, String nestedWithinView = null, String viewRegex = null) {
         String viewName = branchView.viewName
         Map body = [name: viewName, mode: 'hudson.model.ListView', Submit: 'OK', json: '{"name": "' + viewName + '", "mode": "hudson.model.ListView"}']
         println "creating view - viewName:${viewName}, nestedView:${nestedWithinView}"
         post(buildViewPath("createView", nestedWithinView), body)
 
-        body = [useincluderegex: 'on', includeRegex: "${branchView.templateJobPrefix}.*${branchView.safeBranchName}", name: viewName, json: '{"name": "' + viewName + '","useincluderegex": {"includeRegex": "' + branchView.templateJobPrefix + '.*' + branchView.safeBranchName + '"},' + VIEW_COLUMNS_JSON + '}']
+        String regex = viewRegex ? viewRegex.replaceAll("master", branchView.safeBranchName) : "${branchView.templateJobPrefix}.*${branchView.safeBranchName}"
+        body = [useincluderegex: 'on', includeRegex: regex, name: viewName, json: '{"name": "' + viewName + '","useincluderegex": {"includeRegex": "' + regex + '"},' + VIEW_COLUMNS_JSON + '}']
         println "configuring view ${viewName}"
         post(buildViewPath("configSubmit", nestedWithinView, viewName), body)
     }
